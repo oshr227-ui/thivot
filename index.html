@@ -68,7 +68,7 @@
   var choosing = false;
   // serverMode: האתר רץ דרך start.bat. השרת סופר את הלחיצות גם כשהחלון לא בפוקוס וכותב ל-count.txt
   var serverMode = false;
-
+var API = "http://localhost:8765";
   function niceKey(code) {
     if (code === "Space") return "רווח";
     return code.replace("Key", "").replace("Digit", "").replace("Numpad", "נומפד ");
