@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>תיבות</title>
+<style>
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; }
+  body {
+    background:#000; color:#fff;
+    font-family:Arial, Helvetica, sans-serif;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:16px; text-align:center;
+  }
+  .count { font-size:6rem; font-weight:bold; line-height:1; font-variant-numeric:tabular-nums; }
+  .sub { margin:6px 0 24px; font-size:.9rem; }
+  .img-wrap { width:100%; max-width:380px; margin:0 auto 24px; }
+  .img-wrap img { width:100%; display:block; }
+  .placeholder { display:none; border:1px solid #fff; padding:40px 10px; font-size:.9rem; }
+  button { font:inherit; cursor:pointer; background:#000; color:#fff; border:1px solid #fff; padding:12px 24px; border-radius:0; }
+  button:hover { background:#fff; color:#000; }
+  #add { width:100%; max-width:380px; font-size:1.1rem; }
+  .row { margin-top:12px; display:flex; gap:10px; align-items:center; justify-content:center; flex-wrap:wrap; font-size:.9rem; }
+  .row.small button { padding:8px 18px; font-size:.95rem; }
+  .keyname { border:1px solid #fff; padding:6px 12px; }
+  #chooseKey { padding:6px 12px; font-size:.9rem; }
+  #chooseKey.waiting { background:#fff; color:#000; }
+</style>
+</head>
+<body>
+  <div class="count" id="count">0</div>
+  <div class="sub">תיבות</div>
+
+  <div class="img-wrap">
+    <img src="boxes.png" alt="" onerror="this.style.display='none';document.querySelector('.placeholder').style.display='block'">
+    <div class="placeholder">boxes.png</div>
+  </div>
+
+  <button id="add">+ הוסף</button>
+
+  <div class="row small">
+    <button id="sub">הסר 1</button>
+    <button id="reset">אפס</button>
+  </div>
+
+  <div class="row">
+    <span>מקש:</span>
+    <span class="keyname" id="keyname"></span>
+    <button id="chooseKey">שנה</button>
+  </div>
+
+<script>
+(function () {
+  var LIMIT = 100000;
+  var COUNT_KEY = "boxCounter.count";
+  var HOTKEY_KEY = "boxCounter.hotkey";
+
+  var countEl = document.getElementById("count");
+  var keyEl = document.getElementById("keyname");
+  var chooseBtn = document.getElementById("chooseKey");
+
+  function load(k, d) { try { var v = localStorage.getItem(k); return v === null ? d : v; } catch (e) { return d; } }
+  function save(k, v) { try { localStorage.setItem(k, v); } catch (e) {} }
+
+  var count = parseInt(load(COUNT_KEY, "0"), 10) || 0;
+  var hotkey = load(HOTKEY_KEY, "Space");
+  var choosing = false;
+  // serverMode: האתר רץ דרך start.bat. השרת סופר את הלחיצות גם כשהחלון לא בפוקוס וכותב ל-count.txt
+  var serverMode = false;
+
+  function niceKey(code) {
+    if (code === "Space") return "רווח";
+    return code.replace("Key", "").replace("Digit", "").replace("Numpad", "נומפד ");
+  }
+  function render() {
+    countEl.textContent = count.toLocaleString("en-US");
+    keyEl.textContent = niceKey(hotkey);
+  }
+  function post(path, body) {
+    return fetch(path, { method: "POST", body: body || "" }).then(refresh).catch(function () {});
+  }
+  function refresh() {
+    return fetch("/state", { cache: "no-store" })
+      .then(function (r) { return r.ok ? r.text() : ""; })
+      .then(function (t) {
+        var m = /^(\d+),(\d+),(\w+)$/.exec((t || "").trim());
+        if (!m) return;
+        serverMode = true;
+        count = parseInt(m[1], 10);
+        if (!choosing) hotkey = m[3];
+        render();
+      })
+      .catch(function () {});
+  }
+  function localSet(n) { count = n; save(COUNT_KEY, String(count)); render(); }
+
+  function add() {
+    if (serverMode) return post("/add");
+    localSet(count + 1 >= LIMIT ? 0 : count + 1);
+  }
+  function sub() {
+    if (serverMode) return post("/sub");
+    localSet(Math.max(0, count - 1));
+  }
+  function reset() {
+    if (!confirm("לאפס את המונה ל-0?")) return;
+    if (serverMode) return post("/reset");
+    localSet(0);
+  }
+
+  document.getElementById("add").addEventListener("click", function () { add(); this.blur(); });
+  document.getElementById("sub").addEventListener("click", function () { sub(); this.blur(); });
+  document.getElementById("reset").addEventListener("click", function () { reset(); this.blur(); });
+
+  chooseBtn.addEventListener("click", function () {
+    choosing = true;
+    chooseBtn.classList.add("waiting");
+    chooseBtn.textContent = "לחץ מקש...";
+    chooseBtn.blur();
+  });
+
+  document.addEventListener("keydown", function (e) {
+    if (choosing) {
+      e.preventDefault();
+      choosing = false;
+      chooseBtn.classList.remove("waiting");
+      chooseBtn.textContent = "שנה";
+      hotkey = e.code;
+      save(HOTKEY_KEY, hotkey);
+      render();
+      if (serverMode) post("/key", e.keyCode + "," + e.code);
+      return;
+    }
+    // במצב שרת הספירה נעשית ברקע, אז לא סופרים כאן כדי לא לספור פעמיים
+    if (!serverMode && e.code === hotkey && !e.repeat) {
+      e.preventDefault();
+      add();
+    }
+  });
+
+  render();
+  refresh();
+  setInterval(function () { if (serverMode) refresh(); }, 250);
+})();
+</script>
+</body>
+</html>
